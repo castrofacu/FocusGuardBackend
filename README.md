@@ -5,9 +5,9 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-purple.svg)](https://kotlinlang.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.x-green.svg)](https://spring.io/projects/spring-boot)
 [![JDK](https://img.shields.io/badge/JDK-24-blue.svg)](https://openjdk.org)
-[![H2](https://img.shields.io/badge/DB-H2%20In--Memory-orange.svg)](https://www.h2database.com)
+[![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL-316192.svg)](https://www.postgresql.org)
 
-FocusGuard Backend is the server-side counterpart to the [FocusGuard Android app](https://github.com/facucastro/FocusGuard). It is built with Kotlin and Spring Boot and exposes a REST API for storing and retrieving focus sessions. The project is in its early stages — currently backed by an in-memory H2 database and open to unauthenticated requests — with a clear roadmap toward a production-ready service.
+FocusGuard Backend is the server-side counterpart to the [FocusGuard Android app](https://github.com/castrofacu/FocusGuard). It is built with Kotlin and Spring Boot and exposes a REST API for storing and retrieving focus sessions. The project is in its early stages — currently open to unauthenticated requests — with a clear roadmap toward a production-ready service.
 
 ---
 
@@ -29,7 +29,7 @@ FocusGuard Backend is the server-side counterpart to the [FocusGuard Android app
 - **Session Storage** — Create and retrieve focus sessions via a clean REST API
 - **Input Validation** — Bean Validation on all incoming request bodies with structured error responses
 - **Centralized Error Handling** — `@RestControllerAdvice` maps exceptions to consistent `{ status, message }` responses
-- **H2 Console** — In-browser database explorer available at `/h2-console` during development
+- **PostgreSQL** — Persistent relational database; data survives application restarts
 - **Layered Test Suite** — Slice tests (`@WebMvcTest`, `@DataJpaTest`) and pure unit tests with MockK cover each layer independently
 
 ---
@@ -90,7 +90,7 @@ src/test/kotlin
     ├── fixtures/FocusSessionFixtures.kt          ← Shared test data
     ├── controller/FocusSessionControllerTest.kt  ← @WebMvcTest + MockMvc
     ├── dto/FocusSessionMapperTest.kt             ← Pure unit tests
-    ├── repository/FocusSessionRepositoryTest.kt  ← @DataJpaTest
+    ├── repository/FocusSessionRepositoryTest.kt  ← @DataJpaTest + H2
     └── service/FocusSessionServiceImplTest.kt    ← Pure unit tests + MockK
 ```
 
@@ -105,10 +105,10 @@ src/test/kotlin
 | JDK | Java 24 |
 | Web | Spring MVC (`spring-boot-starter-webmvc`) |
 | Persistence | Spring Data JPA + Hibernate |
-| Database | H2 (in-memory) |
+| Database | PostgreSQL |
 | Validation | Jakarta Bean Validation (`spring-boot-starter-validation`) |
 | Serialization | Jackson Kotlin Module |
-| Testing | JUnit 5, MockK, `@WebMvcTest`, `@DataJpaTest` |
+| Testing | JUnit 5, MockK, `@WebMvcTest`, `@DataJpaTest`, H2 (test scope only) |
 
 ---
 
@@ -180,36 +180,49 @@ GET /sessions/{id}
 ### Prerequisites
 
 - JDK 24
+- PostgreSQL instance (local install or Docker)
 - Gradle (or use the included `./gradlew` wrapper)
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/facucastro/FocusGuardBackend.git
+git clone https://github.com/castrofacu/FocusGuardBackend.git
 cd FocusGuardBackend
 ```
 
-### 2. Run the application
+### 2. Create the database
+
+```bash
+psql -U postgres -c "CREATE DATABASE focusguarddb;"
+```
+
+Or with Docker:
+
+```bash
+docker run --name focusguard-db \
+  -e POSTGRES_PASSWORD=postgres \
+  -p 5432:5432 \
+  -d postgres:17
+```
+
+### 3. Configure credentials
+
+The application reads database credentials from environment variables. Set them before running:
+
+```bash
+export DB_USERNAME=postgres
+export DB_PASSWORD=yourpassword
+```
+
+If the variables are not set, the application falls back to `postgres` / `postgres` — suitable for local development only.
+
+### 4. Run the application
 
 ```bash
 ./gradlew bootRun
 ```
 
-The server starts on `http://localhost:8080`.
-
-### 3. Explore the database (optional)
-
-While the app is running, open `http://localhost:8080/h2-console` in a browser.
-
-Use the following connection settings:
-
-| Field | Value |
-|-------|-------|
-| JDBC URL | `jdbc:h2:mem:focusguarddb` |
-| Username | `sa` |
-| Password | *(leave blank)* |
-
-> **Note:** The H2 database is in-memory. All data is lost when the application stops.
+The server starts on `http://localhost:8080`. On first run, Hibernate automatically creates the `focus_sessions` table (`ddl-auto: update`).
 
 ---
 
@@ -219,13 +232,15 @@ Use the following connection settings:
 ./gradlew test
 ```
 
+Tests run without any external infrastructure. Repository tests use an in-memory H2 database (PostgreSQL compatibility mode) so no running PostgreSQL instance or Docker is required.
+
 The test suite covers each layer independently:
 
 | Test class | Strategy | Scope |
 |---|---|---|
 | `FocusSessionControllerTest` | `@WebMvcTest` + MockK | Web layer only |
 | `FocusSessionServiceImplTest` | Pure unit test + MockK | Service only |
-| `FocusSessionRepositoryTest` | `@DataJpaTest` | JPA + H2 |
+| `FocusSessionRepositoryTest` | `@DataJpaTest` + H2 (profile `test`) | JPA layer only |
 | `FocusSessionMapperTest` | Pure unit test | DTO mapping |
 
 ---
@@ -244,16 +259,17 @@ Rather than introducing a mapping library, `FocusSessionMapper.kt` provides `toD
 **Slice tests over full integration tests**  
 Each layer is tested in isolation using Spring's test slices (`@WebMvcTest`, `@DataJpaTest`) and pure unit tests with MockK. This keeps tests fast and failures easy to localize.
 
+**Credentials via environment variables**  
+Database credentials are never hardcoded. `application.yaml` uses `${DB_USERNAME:postgres}` / `${DB_PASSWORD:postgres}` — the value after `:` is a local dev fallback only. Production deployments must supply the real values through environment variables.
+
 ---
 
 ## Roadmap
 
-- [ ] Replace H2 in-memory database with a persistent store (PostgreSQL / MySQL)
 - [ ] Add authentication and authorization (Spring Security + JWT or Firebase token verification)
 - [ ] Enforce per-user data isolation — sessions scoped to the authenticated user
 - [ ] Add pagination and filtering to `GET /sessions`
 - [ ] Add endpoint to delete or update a session
 - [ ] Introduce Docker + `docker-compose` for local development
-- [ ] Set up CI pipeline (GitHub Actions) for automated builds
+- [ ] Migrate repository tests from H2 to Testcontainers once Docker is available
 - [ ] Add request logging and structured application logging
-- [ ] Externalize configuration via environment variables for production deployments
