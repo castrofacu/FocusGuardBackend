@@ -195,7 +195,7 @@ lateinit var service: FocusSessionServiceImpl
 |---|---|---|
 | Controller | `@WebMvcTest` | Web slice only; service mocked |
 | Service impl | Plain unit test | No Spring context; repository mocked |
-| Repository | `@DataJpaTest` + `@ActiveProfiles("test")` | JPA + H2 in-memory (perfil test); no web layer |
+| Repository | `@DataJpaTest` + `@ActiveProfiles("test")` | JPA + H2 in-memory (test profile); no web layer |
 | Mapper | Plain unit test | No Spring context |
 
 ### Test Method Naming
