@@ -195,7 +195,7 @@ lateinit var service: FocusSessionServiceImpl
 |---|---|---|
 | Controller | `@WebMvcTest` | Web slice only; service mocked |
 | Service impl | Plain unit test | No Spring context; repository mocked |
-| Repository | `@DataJpaTest` | JPA + H2; no web layer |
+| Repository | `@DataJpaTest` + `@ActiveProfiles("test")` | JPA + H2 in-memory (perfil test); no web layer |
 | Mapper | Plain unit test | No Spring context |
 
 ### Test Method Naming
@@ -234,8 +234,9 @@ Use `kotlin.test` assertions (`assertEquals`, `assertNotNull`, `assertTrue`, `as
 ## Configuration Notes
 
 - `application.yaml` (not `.properties`) is the config file format.
-- Database: H2 in-memory (`jdbc:h2:mem:focusguarddb`). `ddl-auto: create-drop` — schema is rebuilt on every start; **all data is lost on shutdown**.
-- H2 console available at `http://localhost:8080/h2-console` (JDBC URL: `jdbc:h2:mem:focusguarddb`, user: `sa`, password: empty).
+- Database: PostgreSQL (`jdbc:postgresql://localhost:5432/focusguarddb`). `ddl-auto: update` — Hibernate updates the schema automatically; data persists between restarts.
+- DB credentials are read from environment variables `DB_USERNAME` and `DB_PASSWORD` with fallback defaults (`postgres` / `postgres`) for local development only. Never commit real credentials; always supply them via env vars in production.
+- Repository tests use H2 in-memory (profile `test`): no Docker or running PostgreSQL instance required. H2 runs in PostgreSQL compatibility mode (`MODE=PostgreSQL`). When Docker is added to the project, this will be migrated to Testcontainers.
 - `show-sql: true` and `format_sql: true` are on — SQL is printed to stdout during development.
 - Compiler flags: `-Xjsr305=strict` (strict null safety for JSR-305 annotations), `-Xannotation-default-target=param-property`.
 - `allOpen` is configured for `@Entity`, `@MappedSuperclass`, and `@Embeddable` (Kotlin classes are `final` by default; this is required for Hibernate proxying).
